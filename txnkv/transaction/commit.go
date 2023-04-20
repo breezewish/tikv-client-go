@@ -38,7 +38,6 @@ import (
 	"encoding/hex"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -220,11 +219,11 @@ func (action actionCommit) handleSingleBatch(c *twoPhaseCommitter, bo *retry.Bac
 }
 
 func (c *twoPhaseCommitter) commitMutations(bo *retry.Backoffer, mutations CommitterMutations) error {
-	if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("twoPhaseCommitter.commitMutations", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
-	}
+	// if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
+	// 	span1 := span.Tracer().StartSpan("twoPhaseCommitter.commitMutations", opentracing.ChildOf(span.Context()))
+	// 	defer span1.Finish()
+	// 	bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
+	// }
 
 	return c.doActionOnMutations(bo, actionCommit{isInternal: c.txn.isInternal()}, mutations)
 }

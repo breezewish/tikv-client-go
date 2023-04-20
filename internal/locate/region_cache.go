@@ -50,7 +50,6 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/google/btree"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pkg/errors"
@@ -65,6 +64,9 @@ import (
 	"github.com/tikv/client-go/v2/tikvrpc"
 	"github.com/tikv/client-go/v2/util"
 	pd "github.com/tikv/pd/client"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	atomic2 "go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
@@ -1489,10 +1491,11 @@ func filterUnavailablePeers(region *pd.Region) {
 // when processing in reverse order.
 func (c *RegionCache) loadRegion(bo *retry.Backoffer, key []byte, isEndKey bool) (*Region, error) {
 	ctx := bo.GetCtx()
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("loadRegion", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, span1)
+
+	if trace.SpanFromContext(ctx).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(ctx, "regionCache.loadRegion")
+		defer span.End()
+		ctx = newCtx
 	}
 
 	var backoffErr error
@@ -1544,11 +1547,14 @@ func (c *RegionCache) loadRegion(bo *retry.Backoffer, key []byte, isEndKey bool)
 // loadRegionByID loads region from pd client, and picks the first peer as leader.
 func (c *RegionCache) loadRegionByID(bo *retry.Backoffer, regionID uint64) (*Region, error) {
 	ctx := bo.GetCtx()
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("loadRegionByID", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, span1)
+
+	if trace.SpanFromContext(ctx).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(ctx, "regionCache.loadRegionByID")
+		span.SetAttributes(attribute.Int("RegionID", int(regionID)))
+		defer span.End()
+		ctx = newCtx
 	}
+
 	var backoffErr error
 	for {
 		if backoffErr != nil {
@@ -1609,10 +1615,11 @@ func (c *RegionCache) scanRegions(bo *retry.Backoffer, startKey, endKey []byte, 
 		return nil, nil
 	}
 	ctx := bo.GetCtx()
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("scanRegions", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, span1)
+
+	if trace.SpanFromContext(ctx).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(ctx, "regionCache.scanRegions")
+		defer span.End()
+		ctx = newCtx
 	}
 
 	var backoffErr error

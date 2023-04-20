@@ -43,7 +43,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pkg/errors"
@@ -580,11 +579,11 @@ func (s *KVSnapshot) get(ctx context.Context, bo *retry.Backoffer, k []byte) ([]
 			return value, nil
 		}
 	}
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("tikvSnapshot.get", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		opentracing.ContextWithSpan(ctx, span1)
-	}
+	// if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
+	// 	span1 := span.Tracer().StartSpan("tikvSnapshot.get", opentracing.ChildOf(span.Context()))
+	// 	defer span1.Finish()
+	// 	opentracing.ContextWithSpan(ctx, span1)
+	// }
 	if _, err := util.EvalFailpoint("snapshot-get-cache-fail"); err == nil {
 		if bo.GetCtx().Value("TestSnapshotCache") != nil {
 			s.mu.RUnlock()

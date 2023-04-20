@@ -45,11 +45,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/coprocessor"
 	"github.com/pingcap/kvproto/pkg/errorpb"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
@@ -1086,10 +1087,10 @@ func (s *RegionRequestSender) SendReqCtx(
 	retryTimes int,
 	err error,
 ) {
-	if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("regionRequest.SendReqCtx", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
+	if trace.SpanFromContext(bo.GetCtx()).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(bo.GetCtx(), "regionRequest.SendReqCtx")
+		defer span.End()
+		bo.SetCtx(newCtx)
 	}
 
 	if val, err := util.EvalFailpoint("tikvStoreSendReqResult"); err == nil {
@@ -1487,10 +1488,10 @@ func (s *RegionRequestSender) releaseStoreToken(st *Store) {
 }
 
 func (s *RegionRequestSender) onSendFail(bo *retry.Backoffer, ctx *RPCContext, err error) error {
-	if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("regionRequest.onSendFail", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
+	if trace.SpanFromContext(bo.GetCtx()).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(bo.GetCtx(), "regionRequest.onSendFail")
+		defer span.End()
+		bo.SetCtx(newCtx)
 	}
 	// If it failed because the context is cancelled by ourself, don't retry.
 	if errors.Cause(err) == context.Canceled {
@@ -1622,10 +1623,10 @@ func regionErrorToLabel(e *errorpb.Error) string {
 func (s *RegionRequestSender) onRegionError(
 	bo *retry.Backoffer, ctx *RPCContext, req *tikvrpc.Request, regionErr *errorpb.Error,
 ) (shouldRetry bool, err error) {
-	if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("tikv.onRegionError", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
+	if trace.SpanFromContext(bo.GetCtx()).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(bo.GetCtx(), "regionRequest.onRegionError")
+		defer span.End()
+		bo.SetCtx(newCtx)
 	}
 
 	// NOTE: Please add the region error handler in the same order of errorpb.Error.

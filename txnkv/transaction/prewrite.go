@@ -41,7 +41,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -481,11 +480,11 @@ func (action actionPrewrite) handleSingleBatch(
 }
 
 func (c *twoPhaseCommitter) prewriteMutations(bo *retry.Backoffer, mutations CommitterMutations) error {
-	if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("twoPhaseCommitter.prewriteMutations", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
-	}
+	// if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
+	// 	span1 := span.Tracer().StartSpan("twoPhaseCommitter.prewriteMutations", opentracing.ChildOf(span.Context()))
+	// 	defer span1.Finish()
+	// 	bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
+	// }
 
 	// `doActionOnMutations` will unset `useOnePC` if the mutations is splitted into multiple batches.
 	return c.doActionOnMutations(bo, actionPrewrite{isInternal: c.txn.isInternal()}, mutations)

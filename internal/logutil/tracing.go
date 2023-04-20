@@ -38,30 +38,27 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/log"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
-
-// TraceEventKey presents the TraceEventKey in span log.
-var TraceEventKey = "event"
 
 // Event records event in current tracing span.
 func Event(ctx context.Context, event string) {
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span.LogFields(log.String(TraceEventKey, event))
+	if span := trace.SpanFromContext(ctx); span != nil {
+		span.AddEvent(event)
 	}
 }
 
 // Eventf records event in current tracing span with format support.
 func Eventf(ctx context.Context, format string, args ...interface{}) {
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span.LogFields(log.String(TraceEventKey, fmt.Sprintf(format, args...)))
+	if span := trace.SpanFromContext(ctx); span != nil {
+		span.AddEvent(fmt.Sprintf(format, args...))
 	}
 }
 
 // SetTag sets tag kv-pair in current tracing span
-func SetTag(ctx context.Context, key string, value interface{}) {
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span.SetTag(key, value)
+func SetTag(ctx context.Context, kv ...attribute.KeyValue) {
+	if span := trace.SpanFromContext(ctx); span != nil {
+		span.SetAttributes(kv...)
 	}
 }

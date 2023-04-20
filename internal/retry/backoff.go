@@ -42,13 +42,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/log"
 	"github.com/pkg/errors"
 	tikverr "github.com/tikv/client-go/v2/error"
 	"github.com/tikv/client-go/v2/internal/logutil"
 	"github.com/tikv/client-go/v2/kv"
 	"github.com/tikv/client-go/v2/util"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -112,10 +112,9 @@ func (b *Backoffer) withVars(vars *kv.Variables) *Backoffer {
 // Backoff sleeps a while base on the Config and records the error message.
 // It returns a retryable error if total sleep time exceeds maxSleep.
 func (b *Backoffer) Backoff(cfg *Config, err error) error {
-	if span := opentracing.SpanFromContext(b.ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan(fmt.Sprintf("tikv.backoff.%s", cfg), opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		opentracing.ContextWithSpan(b.ctx, span1)
+	if span := trace.SpanFromContext(b.ctx); span != nil {
+		span.AddEvent("Begin backoff")
+		defer span.AddEvent("Finish backoff")
 	}
 	return b.BackoffWithCfgAndMaxSleep(cfg, -1, err)
 }

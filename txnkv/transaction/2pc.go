@@ -63,6 +63,7 @@ import (
 	"github.com/tikv/client-go/v2/tikvrpc"
 	"github.com/tikv/client-go/v2/txnkv/txnlock"
 	"github.com/tikv/client-go/v2/util"
+	"go.opentelemetry.io/otel/attribute"
 	atomicutil "go.uber.org/atomic"
 	zap "go.uber.org/zap"
 )
@@ -1597,7 +1598,7 @@ func (c *twoPhaseCommitter) execute(ctx context.Context) (err error) {
 		}
 		commitDetail.GetCommitTsTime = time.Since(start)
 		logutil.Event(ctx, "finish get commit ts")
-		logutil.SetTag(ctx, "commitTs", commitTS)
+		logutil.SetTag(ctx, attribute.Int64("commitTs", int64(commitTS)))
 	}
 
 	if !c.isAsyncCommit() {

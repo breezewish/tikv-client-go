@@ -45,7 +45,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
 	"github.com/pkg/errors"
 	"github.com/tikv/client-go/v2/config"
@@ -391,11 +390,11 @@ func (s *KVStore) GetTimestampWithRetry(bo *Backoffer, scope string) (uint64, er
 }
 
 func (s *KVStore) getTimestampWithRetry(bo *Backoffer, txnScope string) (uint64, error) {
-	if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("TiKVStore.getTimestampWithRetry", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
-	}
+	// if span := opentracing.SpanFromContext(bo.GetCtx()); span != nil && span.Tracer() != nil {
+	// 	span1 := span.Tracer().StartSpan("TiKVStore.getTimestampWithRetry", opentracing.ChildOf(span.Context()))
+	// 	defer span1.Finish()
+	// 	bo.SetCtx(opentracing.ContextWithSpan(bo.GetCtx(), span1))
+	// }
 
 	for {
 		startTS, err := s.oracle.GetTimestamp(bo.GetCtx(), &oracle.Option{TxnScope: txnScope})

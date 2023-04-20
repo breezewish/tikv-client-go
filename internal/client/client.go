@@ -40,15 +40,12 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"runtime/trace"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/coprocessor"
 	"github.com/pingcap/kvproto/pkg/debugpb"
 	"github.com/pingcap/kvproto/pkg/mpp"
@@ -62,6 +59,10 @@ import (
 	"github.com/tikv/client-go/v2/metrics"
 	"github.com/tikv/client-go/v2/tikvrpc"
 	"github.com/tikv/client-go/v2/util"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -244,10 +245,10 @@ func (a *connArray) Init(addr string, security config.Security, idleNotify *uint
 		unaryInterceptor  grpc.UnaryClientInterceptor
 		streamInterceptor grpc.StreamClientInterceptor
 	)
-	if cfg.OpenTracingEnable {
-		unaryInterceptor = grpc_opentracing.UnaryClientInterceptor()
-		streamInterceptor = grpc_opentracing.StreamClientInterceptor()
-	}
+	// if cfg.OpenTracingEnable {
+	unaryInterceptor = otelgrpc.UnaryClientInterceptor()
+	streamInterceptor = otelgrpc.StreamClientInterceptor()
+	// }
 
 	allowBatch := (cfg.TiKVClient.MaxBatchSize > 0) && enableBatch
 	if allowBatch {
@@ -582,12 +583,22 @@ func (c *RPCClient) updateTiKVSendReqHistogram(req *tikvrpc.Request, resp *tikvr
 }
 
 func (c *RPCClient) sendRequest(ctx context.Context, addr string, req *tikvrpc.Request, timeout time.Duration) (resp *tikvrpc.Response, err error) {
-	var spanRPC opentracing.Span
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		spanRPC = span.Tracer().StartSpan(fmt.Sprintf("rpcClient.SendRequest, region ID: %d, type: %s", req.RegionId, req.Type), opentracing.ChildOf(span.Context()))
-		defer spanRPC.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, spanRPC)
+	// var spanRPC trace.Span
+	if trace.SpanFromContext(ctx).IsRecording() {
+		newCtx, span := otel.Tracer("client").Start(ctx, "rpcClient.SendRequest")
+		span.SetAttributes(attribute.Int("RegionID", int(req.RegionId)))
+		span.SetAttributes(attribute.String("Type", req.Type.String()))
+		span.SetAttributes(attribute.String("Addr", addr))
+		defer span.End()
+
+		ctx = newCtx
 	}
+
+	// if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
+	// 	spanRPC = span.Tracer().StartSpan(fmt.Sprintf("rpcClient.SendRequest, region ID: %d, type: %s", req.RegionId, req.Type), opentracing.ChildOf(span.Context()))
+	// 	defer spanRPC.Finish()
+	// 	ctx = opentracing.ContextWithSpan(ctx, spanRPC)
+	// }
 
 	if atomic.CompareAndSwapUint32(&c.idleNotify, 1, 0) {
 		go c.recycleIdleConnArray()
@@ -611,18 +622,18 @@ func (c *RPCClient) sendRequest(ctx context.Context, addr string, req *tikvrpc.R
 		}
 		c.updateTiKVSendReqHistogram(req, resp, start, staleRead)
 
-		if spanRPC != nil && util.TraceExecDetailsEnabled(ctx) {
-			if si := buildSpanInfoFromResp(resp); si != nil {
-				si.addTo(spanRPC, start)
-			}
-		}
+		// if spanRPC != nil && util.TraceExecDetailsEnabled(ctx) {
+		// 	if si := buildSpanInfoFromResp(resp); si != nil {
+		// 		si.addTo(spanRPC, start)
+		// 	}
+		// }
 	}()
 
 	// TiDB RPC server supports batch RPC, but batch connection will send heart beat, It's not necessary since
 	// request to TiDB is not high frequency.
 	if config.GetGlobalConfig().TiKVClient.MaxBatchSize > 0 && enableBatch {
 		if batchReq := req.ToBatchCommandsRequest(); batchReq != nil {
-			defer trace.StartRegion(ctx, req.Type.String()).End()
+			// defer trace.StartRegion(ctx, req.Type.String()).End()
 			return sendBatchRequest(ctx, addr, req.ForwardedHost, connArray.batchConn, batchReq, timeout)
 		}
 	}
@@ -828,28 +839,28 @@ func (si *spanInfo) calcDur() uint64 {
 	return si.dur
 }
 
-func (si *spanInfo) addTo(parent opentracing.Span, start time.Time) time.Time {
-	if parent == nil {
-		return start
-	}
-	dur := si.calcDur()
-	if dur == 0 {
-		return start
-	}
-	end := start.Add(time.Duration(dur) * time.Nanosecond)
-	tracer := parent.Tracer()
-	span := tracer.StartSpan(si.name, opentracing.ChildOf(parent.Context()), opentracing.StartTime(start))
-	t := start
-	for _, child := range si.children {
-		t = child.addTo(span, t)
-	}
-	span.FinishWithOptions(opentracing.FinishOptions{FinishTime: end})
-	if si.async {
-		span.SetTag("async", "true")
-		return start
-	}
-	return end
-}
+// func (si *spanInfo) addTo(parent opentracing.Span, start time.Time) time.Time {
+// 	if parent == nil {
+// 		return start
+// 	}
+// 	dur := si.calcDur()
+// 	if dur == 0 {
+// 		return start
+// 	}
+// 	end := start.Add(time.Duration(dur) * time.Nanosecond)
+// 	tracer := parent.Tracer()
+// 	span := tracer.StartSpan(si.name, opentracing.ChildOf(parent.Context()), opentracing.StartTime(start))
+// 	t := start
+// 	for _, child := range si.children {
+// 		t = child.addTo(span, t)
+// 	}
+// 	span.FinishWithOptions(opentracing.FinishOptions{FinishTime: end})
+// 	if si.async {
+// 		span.SetTag("async", "true")
+// 		return start
+// 	}
+// 	return end
+// }
 
 func (si *spanInfo) printTo(out io.StringWriter) {
 	out.WriteString(si.name)

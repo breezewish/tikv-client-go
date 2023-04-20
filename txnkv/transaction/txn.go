@@ -48,7 +48,6 @@ import (
 	"time"
 
 	"github.com/dgryski/go-farm"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
 	"github.com/pkg/errors"
@@ -399,11 +398,11 @@ func (txn *KVTxn) GetScope() string {
 
 // Commit commits the transaction operations to KV store.
 func (txn *KVTxn) Commit(ctx context.Context) error {
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("tikvTxn.Commit", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, span1)
-	}
+	// if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
+	// 	span1 := span.Tracer().StartSpan("tikvTxn.Commit", opentracing.ChildOf(span.Context()))
+	// 	defer span1.Finish()
+	// 	ctx = opentracing.ContextWithSpan(ctx, span1)
+	// }
 	defer trace.StartRegion(ctx, "CommitTxn").End()
 
 	if !txn.valid {
